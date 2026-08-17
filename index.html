@@ -1,35 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
+
     <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+          content="width=device-width,
+                   initial-scale=1.0,
+                   maximum-scale=1.0,
+                   user-scalable=no">
 
     <title>School Uniform AI</title>
 
     <link rel="stylesheet" href="style.css">
-
-    <!-- MediaPipe -->
-    <script type="module"
-        src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm">
-    </script>
 </head>
+
 
 <body>
 
 <header>
-    <div class="logo">SU<span>AI</span></div>
+
+    <div class="logo">
+        SU<span>AI</span>
+    </div>
 
     <div>
         <h1>School Uniform AI</h1>
         <p>AI-assisted uniform measurement</p>
     </div>
+
 </header>
 
 
 <main>
 
-    <!-- INTRODUCTION -->
+
+    <!-- =========================
+         INTRO
+    ========================== -->
 
     <section id="intro" class="card">
 
@@ -38,10 +46,10 @@
         <h2>Student Uniform Measurement</h2>
 
         <p>
-            Position yourself inside the body outline.
-            The camera will detect your body and estimate
-            measurements for uniform sizing.
+            Get an AI-assisted estimate of a student's
+            body measurements for school uniform sizing.
         </p>
+
 
         <div class="instructions">
 
@@ -67,88 +75,146 @@
 
         </div>
 
-        <button onclick="showStudentForm()">
+
+        <button
+            type="button"
+            onclick="showStudentForm()">
+
             Start Measurement
+
         </button>
 
     </section>
 
 
-    <!-- STUDENT DETAILS -->
 
-    <section id="studentForm" class="card hidden">
+    <!-- =========================
+         STUDENT DETAILS
+    ========================== -->
+
+    <section
+        id="studentForm"
+        class="card hidden">
 
         <h2>Student Details</h2>
 
-        <label>Student Name</label>
+        <p class="form-description">
+            Enter the basic details before starting
+            the body scan.
+        </p>
+
+
+        <label for="studentName">
+            Student Name
+        </label>
 
         <input
             id="studentName"
             type="text"
-            placeholder="Enter student name"
-        >
+            autocomplete="name"
+            placeholder="Enter student name">
 
-        <label>Student ID</label>
+
+        <label for="studentId">
+            Student ID
+        </label>
 
         <input
             id="studentId"
             type="text"
-            placeholder="Enter student ID"
-        >
+            placeholder="Enter student ID">
 
-        <label>Class</label>
+
+        <label for="studentClass">
+            Class
+        </label>
 
         <input
             id="studentClass"
             type="text"
-            placeholder="Example: 8-A"
-        >
+            placeholder="Example: 8-A">
 
-        <label>Height (cm)</label>
+
+        <label for="studentHeight">
+            Height (cm)
+        </label>
 
         <input
             id="studentHeight"
             type="number"
-            placeholder="Example: 150"
-        >
+            inputmode="decimal"
+            min="80"
+            max="220"
+            placeholder="Example: 150">
+
 
         <p class="small-note">
-            Height is currently used as the calibration reference.
+            Height is currently used as the reference
+            for estimating body measurements.
         </p>
 
-        <button onclick="startCamera()">
-            Continue to Camera
+
+        <button
+            type="button"
+            onclick="startCamera()">
+
+            Continue to Camera 📷
+
+        </button>
+
+
+        <button
+            type="button"
+            class="secondary-button"
+            onclick="location.reload()">
+
+            ← Back
+
         </button>
 
     </section>
 
 
-    <!-- CAMERA -->
 
-    <section id="cameraSection" class="camera-section hidden">
+    <!-- =========================
+         CAMERA
+    ========================== -->
+
+    <section
+        id="cameraSection"
+        class="camera-section hidden">
+
 
         <div class="camera-header">
 
             <h2>Position Yourself</h2>
 
             <p id="instruction">
-                Initializing camera...
+                Loading body detection...
             </p>
 
         </div>
 
 
+
         <div class="camera-container">
+
+            <!-- LIVE CAMERA -->
 
             <video
                 id="camera"
                 autoplay
-                playsinline>
+                playsinline
+                muted>
             </video>
 
-            <!-- Body guide -->
 
-            <div class="body-outline">
+            <!-- BODY OUTLINE -->
+
+            <div
+                class="body-outline"
+                id="bodyOutline">
+
 
                 <div class="head-outline"></div>
 
@@ -171,16 +237,24 @@
             </div>
 
 
-            <!-- Pose points -->
+            <!-- MEDIAPIPE LANDMARK CANVAS -->
 
-            <canvas id="poseCanvas"></canvas>
+            <canvas
+                id="poseCanvas">
+            </canvas>
 
         </div>
 
 
+
+        <!-- POSITION STATUS -->
+
         <div class="status-box">
 
-            <div id="statusLight"></div>
+            <div
+                id="statusLight"
+                class="status-light">
+            </div>
 
             <span id="statusText">
                 Detecting body...
@@ -189,85 +263,195 @@
         </div>
 
 
+
+        <!-- CAPTURE BUTTON -->
+
         <button
             id="captureButton"
+            type="button"
             onclick="capturePhoto()"
             disabled>
 
-            📸 Capture
+            📸 Capture Measurement
 
         </button>
 
-    </section>
 
-
-    <!-- PROCESSING -->
-
-    <section id="processing" class="card hidden">
-
-        <div class="loader"></div>
-
-        <h2>Analyzing Student</h2>
-
-        <p>
-            Detecting body landmarks and calculating
-            approximate measurements...
+        <p class="camera-note">
+            Stand still when the status turns green.
         </p>
 
     </section>
 
 
-    <!-- RESULTS -->
 
-    <section id="results" class="card hidden">
+    <!-- =========================
+         PROCESSING
+    ========================== -->
+
+    <section
+        id="processing"
+        class="card hidden">
+
+
+        <div class="loader"></div>
+
+
+        <h2>
+            Analyzing Student
+        </h2>
+
+
+        <p>
+            Detecting body landmarks and calculating
+            approximate uniform measurements...
+        </p>
+
+
+        <div class="processing-steps">
+
+            <div>
+                ✓ Detecting body
+            </div>
+
+            <div>
+                ✓ Calculating proportions
+            </div>
+
+            <div>
+                ✓ Preparing uniform size
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- =========================
+         RESULTS
+    ========================== -->
+
+    <section
+        id="results"
+        class="card hidden">
+
 
         <div class="success-icon">
             ✓
         </div>
 
-        <h2>Measurement Complete</h2>
 
-        <p id="resultStudent"></p>
+        <h2>
+            Measurement Complete
+        </h2>
 
+
+        <p id="resultStudent">
+            Student
+        </p>
+
+
+
+        <!-- MEASUREMENTS -->
 
         <div class="measurement-grid">
 
-            <div>
-                <span>Height</span>
-                <strong id="heightResult">--</strong>
+
+            <div class="measurement-box">
+
+                <span>
+                    Height
+                </span>
+
+                <strong id="heightResult">
+                    --
+                </strong>
+
             </div>
 
-            <div>
-                <span>Shoulder</span>
-                <strong id="shoulderResult">--</strong>
+
+
+            <div class="measurement-box">
+
+                <span>
+                    Shoulder
+                </span>
+
+                <strong id="shoulderResult">
+                    --
+                </strong>
+
             </div>
 
-            <div>
-                <span>Arm Length</span>
-                <strong id="armResult">--</strong>
+
+
+            <div class="measurement-box">
+
+                <span>
+                    Arm Length
+                </span>
+
+                <strong id="armResult">
+                    --
+                </strong>
+
             </div>
 
-            <div>
-                <span>Inseam</span>
-                <strong id="inseamResult">--</strong>
+
+
+            <div class="measurement-box">
+
+                <span>
+                    Inseam
+                </span>
+
+                <strong id="inseamResult">
+                    --
+                </strong>
+
             </div>
 
-            <div>
-                <span>Chest Estimate</span>
-                <strong id="chestResult">--</strong>
+
+
+            <div class="measurement-box">
+
+                <span>
+                    Chest Estimate
+                </span>
+
+                <strong id="chestResult">
+                    --
+                </strong>
+
             </div>
 
-            <div>
-                <span>Waist Estimate</span>
-                <strong id="waistResult">--</strong>
+
+
+            <div class="measurement-box">
+
+                <span>
+                    Waist Estimate
+                </span>
+
+                <strong id="waistResult">
+                    --
+                </strong>
+
             </div>
+
 
         </div>
 
 
+
+        <!-- UNIFORM SIZE -->
+
         <div class="uniform-result">
 
-            <span>Recommended Uniform Size</span>
+            <span>
+                Recommended Uniform Size
+            </span>
 
             <strong id="uniformSize">
                 --
@@ -276,21 +460,39 @@
         </div>
 
 
-        <p class="disclaimer">
-            ⚠️ These are AI-assisted estimates for prototype
-            purposes and should not yet be treated as
-            tailor-accurate measurements.
-        </p>
+
+        <!-- PROTOTYPE WARNING -->
+
+        <div class="disclaimer">
+
+            ⚠️ <strong>Prototype:</strong>
+
+            These measurements are AI-assisted
+            estimates. They are not yet equivalent
+            to professional tailor measurements.
+
+        </div>
 
 
-        <button onclick="location.reload()">
+
+        <button
+            type="button"
+            onclick="location.reload()">
+
             Measure Another Student
+
         </button>
+
 
     </section>
 
 </main>
 
+
+
+<!-- =========================
+     FOOTER
+========================== -->
 
 <footer>
 
@@ -298,10 +500,25 @@
         School Uniform AI • Prototype v1.0
     </p>
 
+    <p class="footer-note">
+        Designed for school uniform sizing
+    </p>
+
 </footer>
 
 
-<script type="module" src="script.js"></script>
+
+<!-- IMPORTANT:
+     script.js is a MODULE because it
+     imports MediaPipe from the CDN.
+-->
+
+<script
+    type="module"
+    src="script.js">
+</script>
+
 
 </body>
-</html> 
+
+</html>
