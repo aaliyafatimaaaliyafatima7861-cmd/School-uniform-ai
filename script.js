@@ -1,24 +1,14 @@
-import {
-    FilesetResolver,
-    PoseLandmarker
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm";
-
-
 let poseLandmarker = null;
 
 let video = document.getElementById("camera");
-
 let canvas = document.getElementById("poseCanvas");
-
 let ctx = canvas.getContext("2d");
 
 let stream = null;
-
 let latestLandmarks = null;
-
 let studentData = {};
-
 let personReady = false;
+let previousTime = -1;
 
 
 /* --------------------------------------------------
@@ -27,20 +17,11 @@ let personReady = false;
 
 function hideAllSections() {
 
-    document.getElementById("intro")
-        .classList.add("hidden");
-
-    document.getElementById("studentForm")
-        .classList.add("hidden");
-
-    document.getElementById("cameraSection")
-        .classList.add("hidden");
-
-    document.getElementById("processing")
-        .classList.add("hidden");
-
-    document.getElementById("results")
-        .classList.add("hidden");
+    document.getElementById("intro").classList.add("hidden");
+    document.getElementById("studentForm").classList.add("hidden");
+    document.getElementById("cameraSection").classList.add("hidden");
+    document.getElementById("processing").classList.add("hidden");
+    document.getElementById("results").classList.add("hidden");
 }
 
 
@@ -48,14 +29,12 @@ window.showStudentForm = function () {
 
     hideAllSections();
 
-    document
-        .getElementById("studentForm")
-        .classList.remove("hidden");
+    document.getElementById("studentForm").classList.remove("hidden");
 };
 
 
 /* --------------------------------------------------
-   CAMERA
+   START CAMERA
 -------------------------------------------------- */
 
 window.startCamera = async function () {
@@ -85,22 +64,17 @@ window.startCamera = async function () {
 
     if (height < 80 || height > 220) {
 
-        alert("Please enter a realistic height in cm.");
+        alert("Please enter a realistic height between 80 and 220 cm.");
 
         return;
     }
 
 
     studentData = {
-
         name: name,
-
         id: id,
-
         className: studentClass,
-
         height: height
-
     };
 
 
@@ -111,130 +85,146 @@ window.startCamera = async function () {
         .classList.remove("hidden");
 
 
-    await setupPoseDetection();
+    setStatus(
+        "yellow",
+        "Loading body detection..."
+    );
 
-    await openCamera();
 
+    try {
+
+        await setupPoseDetection();
+
+        await openCamera();
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "Unable to start the camera system. Please check your internet connection and camera permission."
+        );
+
+        hideAllSections();
+
+        document
+            .getElementById("studentForm")
+            .classList.remove("hidden");
+    }
 };
 
 
 /* --------------------------------------------------
-   MEDIAPIPE POSE
+   LOAD MEDIAPIPE
 -------------------------------------------------- */
 
 async function setupPoseDetection() {
 
-    try {
-
-        document.getElementById("instruction")
-            .innerText =
-            "Loading body detection...";
-
-
-        const vision =
-            await FilesetResolver.forVisionTasks(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
-            );
-
-
-        poseLandmarker =
-            await PoseLandmarker.createFromOptions(
-                vision,
-                {
-
-                    baseOptions: {
-
-                        modelAssetPath:
-                            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-
-                        delegate: "GPU"
-
-                    },
-
-                    runningMode: "VIDEO",
-
-                    numPoses: 1,
-
-                    minPoseDetectionConfidence: 0.5,
-
-                    minPosePresenceConfidence: 0.5,
-
-                    minTrackingConfidence: 0.5
-
-                }
-            );
-
-
-        document.getElementById("instruction")
-            .innerText =
-            "Stand inside the body outline.";
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        alert(
-            "Could not load the body detection model. Check your internet connection."
-        );
-
+    if (poseLandmarker) {
+        return;
     }
 
+
+    const {
+        FilesetResolver,
+        PoseLandmarker
+    } =
+        await import(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm"
+        );
+
+
+    const vision =
+        await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
+        );
+
+
+    poseLandmarker =
+        await PoseLandmarker.createFromOptions(
+            vision,
+            {
+
+                baseOptions: {
+
+                    modelAssetPath:
+                        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+
+                    delegate: "GPU"
+                },
+
+                runningMode: "VIDEO",
+
+                numPoses: 1,
+
+                minPoseDetectionConfidence: 0.5,
+
+                minPosePresenceConfidence: 0.5,
+
+                minTrackingConfidence: 0.5
+            }
+        );
+
+
+    document.getElementById("instruction").innerText =
+        "Stand inside the body outline.";
 }
 
 
 /* --------------------------------------------------
-   OPEN PHONE CAMERA
+   OPEN CAMERA
 -------------------------------------------------- */
 
 async function openCamera() {
 
-    try {
+    if (!navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia) {
 
-        stream =
-            await navigator.mediaDevices.getUserMedia({
-
-                video: {
-
-                    facingMode: "user",
-
-                    width: {
-                        ideal: 720
-                    },
-
-                    height: {
-                        ideal: 960
-                    }
-
-                },
-
-                audio: false
-
-            });
-
-
-        video.srcObject = stream;
-
-        await video.play();
-
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-
-        requestAnimationFrame(detectPose);
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        alert(
-            "Camera permission was denied or the camera is unavailable."
+        throw new Error(
+            "Camera API not supported."
         );
-
     }
 
+
+    stream =
+        await navigator.mediaDevices.getUserMedia({
+
+            video: {
+
+                facingMode: "user",
+
+                width: {
+                    ideal: 720
+                },
+
+                height: {
+                    ideal: 960
+                }
+            },
+
+            audio: false
+        });
+
+
+    video.srcObject = stream;
+
+    await video.play();
+
+
+    canvas.width =
+        video.videoWidth;
+
+    canvas.height =
+        video.videoHeight;
+
+
+    setStatus(
+        "yellow",
+        "Detecting your body..."
+    );
+
+
+    requestAnimationFrame(detectPose);
 }
 
 
@@ -242,17 +232,14 @@ async function openCamera() {
    BODY DETECTION
 -------------------------------------------------- */
 
-let previousTime = -1;
-
-
 async function detectPose(time) {
 
-    if (!poseLandmarker || video.readyState < 2) {
+    if (!poseLandmarker ||
+        video.readyState < 2) {
 
         requestAnimationFrame(detectPose);
 
         return;
-
     }
 
 
@@ -277,22 +264,37 @@ async function detectPose(time) {
                 result.landmarks[0];
 
 
-            drawLandmarks(latestLandmarks);
+            drawLandmarks(
+                latestLandmarks
+            );
 
-            checkBodyPosition(latestLandmarks);
 
+            checkBodyPosition(
+                latestLandmarks
+            );
+
+        } else {
+
+            setStatus(
+                "red",
+                "No person detected. Step into the outline."
+            );
+
+            personReady = false;
+
+            document.getElementById(
+                "captureButton"
+            ).disabled = true;
         }
-
     }
 
 
     requestAnimationFrame(detectPose);
-
 }
 
 
 /* --------------------------------------------------
-   DRAW BODY LANDMARKS
+   DRAW LANDMARKS
 -------------------------------------------------- */
 
 function drawLandmarks(landmarks) {
@@ -328,9 +330,7 @@ function drawLandmarks(landmarks) {
         );
 
         ctx.fill();
-
     });
-
 }
 
 
@@ -339,21 +339,6 @@ function drawLandmarks(landmarks) {
 -------------------------------------------------- */
 
 function checkBodyPosition(landmarks) {
-
-    /*
-        MediaPipe landmark numbers:
-
-        0  = nose
-        11 = left shoulder
-        12 = right shoulder
-        15 = left wrist
-        16 = right wrist
-        23 = left hip
-        24 = right hip
-        27 = left ankle
-        28 = right ankle
-    */
-
 
     const nose = landmarks[0];
 
@@ -387,8 +372,9 @@ function checkBodyPosition(landmarks) {
 
         personReady = false;
 
-        return;
+        disableCapture();
 
+        return;
     }
 
 
@@ -407,15 +393,6 @@ function checkBodyPosition(landmarks) {
         bodyBottom - bodyTop;
 
 
-    /*
-        Camera positioning check.
-
-        This is a prototype threshold.
-        It will be replaced with a calibrated
-        scanning system later.
-    */
-
-
     if (bodyHeight < 0.65) {
 
         setStatus(
@@ -425,8 +402,9 @@ function checkBodyPosition(landmarks) {
 
         personReady = false;
 
-        return;
+        disableCapture();
 
+        return;
     }
 
 
@@ -439,14 +417,10 @@ function checkBodyPosition(landmarks) {
 
         personReady = false;
 
+        disableCapture();
+
         return;
-
     }
-
-
-    /*
-        Check whether shoulders are roughly level.
-    */
 
 
     const shoulderDifference =
@@ -465,14 +439,10 @@ function checkBodyPosition(landmarks) {
 
         personReady = false;
 
+        disableCapture();
+
         return;
-
     }
-
-
-    /*
-        If everything is okay.
-    */
 
 
     setStatus(
@@ -487,7 +457,14 @@ function checkBodyPosition(landmarks) {
     document.getElementById(
         "captureButton"
     ).disabled = false;
+}
 
+
+function disableCapture() {
+
+    document.getElementById(
+        "captureButton"
+    ).disabled = true;
 }
 
 
@@ -504,6 +481,11 @@ function setStatus(color, message) {
         document.getElementById("statusText");
 
 
+    if (!light || !text) {
+        return;
+    }
+
+
     text.innerText = message;
 
 
@@ -511,20 +493,14 @@ function setStatus(color, message) {
 
         light.style.background = "#20bf6b";
 
-    }
-
-    else if (color === "yellow") {
+    } else if (color === "yellow") {
 
         light.style.background = "#f1b900";
 
-    }
-
-    else {
+    } else {
 
         light.style.background = "#eb3b5a";
-
     }
-
 }
 
 
@@ -537,7 +513,6 @@ window.capturePhoto = function () {
     if (!latestLandmarks || !personReady) {
 
         return;
-
     }
 
 
@@ -559,7 +534,6 @@ window.capturePhoto = function () {
         );
 
     }, 1800);
-
 };
 
 
@@ -575,8 +549,8 @@ function stopCamera() {
             track => track.stop()
         );
 
+        stream = null;
     }
-
 }
 
 
@@ -585,15 +559,6 @@ function stopCamera() {
 -------------------------------------------------- */
 
 function calculateMeasurements(landmarks) {
-
-    /*
-        We use the student's entered height
-        to establish approximate scale.
-
-        This is NOT yet a true physical
-        measurement system.
-    */
-
 
     const knownHeight =
         studentData.height;
@@ -626,11 +591,6 @@ function calculateMeasurements(landmarks) {
     const rightAnkle = landmarks[28];
 
 
-    /*
-        Approximate body height in image.
-    */
-
-
     const top =
         nose.y;
 
@@ -646,16 +606,6 @@ function calculateMeasurements(landmarks) {
         bottom - top;
 
 
-    /*
-        Convert normalized coordinates
-        into approximate cm.
-
-        The camera image is normalized from
-        0 to 1, so this is a proportional
-        estimate.
-    */
-
-
     function distance(a, b) {
 
         const dx =
@@ -669,7 +619,6 @@ function calculateMeasurements(landmarks) {
             dx * dx +
             dy * dy
         );
-
     }
 
 
@@ -679,13 +628,8 @@ function calculateMeasurements(landmarks) {
             distance(a, b) /
             pixelHeight
         ) * knownHeight;
-
     }
 
-
-    /*
-        Shoulder width
-    */
 
     const shoulder =
         cmDistance(
@@ -693,10 +637,6 @@ function calculateMeasurements(landmarks) {
             rightShoulder
         );
 
-
-    /*
-        Arm length
-    */
 
     const leftArm =
         cmDistance(
@@ -724,10 +664,6 @@ function calculateMeasurements(landmarks) {
         (leftArm + rightArm) / 2;
 
 
-    /*
-        Inseam approximation
-    */
-
     const leftLeg =
         cmDistance(
             leftHip,
@@ -754,33 +690,12 @@ function calculateMeasurements(landmarks) {
         ((leftLeg + rightLeg) / 2) * 0.88;
 
 
-    /*
-        Chest and waist are NOT directly
-        measurable from one 2D image.
-
-        For this prototype we use body
-        proportions to generate rough
-        estimates.
-
-        These MUST be replaced by a
-        calibrated front + side model later.
-    */
-
-
-    const shoulderWidth = shoulder;
-
-
     const chest =
-        shoulderWidth * 2.15;
+        shoulder * 2.15;
 
 
     const waist =
-        shoulderWidth * 1.75;
-
-
-    /*
-        Display results
-    */
+        shoulder * 1.75;
 
 
     document.getElementById(
@@ -819,10 +734,6 @@ function calculateMeasurements(landmarks) {
         round(waist) + " cm";
 
 
-    /*
-        Uniform size
-    */
-
     const uniformSize =
         calculateUniformSize(
             chest,
@@ -848,7 +759,6 @@ function calculateMeasurements(landmarks) {
     document
         .getElementById("results")
         .classList.remove("hidden");
-
 }
 
 
@@ -861,46 +771,27 @@ function calculateUniformSize(
     waist
 ) {
 
-    /*
-        Demo school sizing.
-
-        Later, the school administrator
-        will define its own size chart.
-    */
-
-
     if (chest < 70) {
-
         return "28";
-
     }
 
     if (chest < 76) {
-
         return "30";
-
     }
 
     if (chest < 82) {
-
         return "32";
-
     }
 
     if (chest < 88) {
-
         return "34";
-
     }
 
     if (chest < 94) {
-
         return "36";
-
     }
 
     return "38+";
-
 }
 
 
@@ -910,6 +801,7 @@ function calculateUniformSize(
 
 function round(number) {
 
-    return Math.round(number * 10) / 10;
-
+    return Math.round(
+        number * 10
+    ) / 10;
 }
