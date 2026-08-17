@@ -11,9 +11,9 @@ let personReady = false;
 let previousTime = -1;
 
 
-/* --------------------------------------------------
+/* ==================================================
    PAGE NAVIGATION
--------------------------------------------------- */
+================================================== */
 
 function hideAllSections() {
 
@@ -29,13 +29,15 @@ window.showStudentForm = function () {
 
     hideAllSections();
 
-    document.getElementById("studentForm").classList.remove("hidden");
+    document
+        .getElementById("studentForm")
+        .classList.remove("hidden");
 };
 
 
-/* --------------------------------------------------
-   START CAMERA
--------------------------------------------------- */
+/* ==================================================
+   START CAMERA PROCESS
+================================================== */
 
 window.startCamera = async function () {
 
@@ -54,6 +56,8 @@ window.startCamera = async function () {
         );
 
 
+    /* CHECK DETAILS */
+
     if (!name || !id || !studentClass || !height) {
 
         alert("Please fill all student details.");
@@ -64,19 +68,28 @@ window.startCamera = async function () {
 
     if (height < 80 || height > 220) {
 
-        alert("Please enter a realistic height between 80 and 220 cm.");
+        alert(
+            "Please enter a realistic height between 80 and 220 cm."
+        );
 
         return;
     }
 
 
     studentData = {
+
         name: name,
+
         id: id,
+
         className: studentClass,
+
         height: height
+
     };
 
+
+    /* SHOW CAMERA SCREEN */
 
     hideAllSections();
 
@@ -87,23 +100,93 @@ window.startCamera = async function () {
 
     setStatus(
         "yellow",
-        "Loading body detection..."
+        "Opening camera..."
     );
 
 
     try {
 
-        await setupPoseDetection();
+        /*
+         * IMPORTANT:
+         * Camera is opened BEFORE MediaPipe.
+         */
 
         await openCamera();
 
+
+        setStatus(
+            "yellow",
+            "Loading body detection..."
+        );
+
+
+        await setupPoseDetection();
+
+
+        setStatus(
+            "yellow",
+            "Detecting your body..."
+        );
+
+
     } catch (error) {
 
-        console.error(error);
-
-        alert(
-            "Unable to start the camera system. Please check your internet connection and camera permission."
+        console.error(
+            "STARTUP ERROR:",
+            error
         );
+
+
+        let message =
+            "Something went wrong.";
+
+
+        if (
+            error.name ===
+            "NotAllowedError"
+        ) {
+
+            message =
+                "Camera permission was denied. Please allow camera access for this website in your browser settings.";
+
+        } else if (
+            error.name ===
+            "NotFoundError"
+        ) {
+
+            message =
+                "No camera was found on this device.";
+
+        } else if (
+            error.name ===
+            "NotReadableError"
+        ) {
+
+            message =
+                "The camera is already being used by another application.";
+
+        } else if (
+            error.message &&
+            error.message.includes("MediaPipe")
+        ) {
+
+            message =
+                "The camera works, but the AI body-detection model could not load. Please check your internet connection.";
+
+        } else if (
+            error.message
+        ) {
+
+            message =
+                error.message;
+        }
+
+
+        alert(message);
+
+
+        stopCamera();
+
 
         hideAllSections();
 
@@ -114,77 +197,26 @@ window.startCamera = async function () {
 };
 
 
-/* --------------------------------------------------
-   LOAD MEDIAPIPE
--------------------------------------------------- */
-
-async function setupPoseDetection() {
-
-    if (poseLandmarker) {
-        return;
-    }
-
-
-    const {
-        FilesetResolver,
-        PoseLandmarker
-    } =
-        await import(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm"
-        );
-
-
-    const vision =
-        await FilesetResolver.forVisionTasks(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
-        );
-
-
-    poseLandmarker =
-        await PoseLandmarker.createFromOptions(
-            vision,
-            {
-
-                baseOptions: {
-
-                    modelAssetPath:
-                        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-
-                    delegate: "GPU"
-                },
-
-                runningMode: "VIDEO",
-
-                numPoses: 1,
-
-                minPoseDetectionConfidence: 0.5,
-
-                minPosePresenceConfidence: 0.5,
-
-                minTrackingConfidence: 0.5
-            }
-        );
-
-
-    document.getElementById("instruction").innerText =
-        "Stand inside the body outline.";
-}
-
-
-/* --------------------------------------------------
+/* ==================================================
    OPEN CAMERA
--------------------------------------------------- */
+================================================== */
 
 async function openCamera() {
 
-    if (!navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia) {
+    if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+    ) {
 
         throw new Error(
-            "Camera API not supported."
+            "Camera access is not supported by this browser."
         );
     }
 
+
+    /*
+     * Request camera permission.
+     */
 
     stream =
         await navigator.mediaDevices.getUserMedia({
@@ -200,44 +232,216 @@ async function openCamera() {
                 height: {
                     ideal: 960
                 }
+
             },
 
             audio: false
+
         });
 
 
+    /*
+     * Connect camera to video element.
+     */
+
     video.srcObject = stream;
+
+    video.muted = true;
+
+    video.playsInline = true;
+
+    video.autoplay = true;
+
 
     await video.play();
 
 
+    /*
+     * Wait until camera gives us dimensions.
+     */
+
+    await waitForVideo();
+
+
     canvas.width =
-        video.videoWidth;
+        video.videoWidth || 720;
 
     canvas.height =
-        video.videoHeight;
-
-
-    setStatus(
-        "yellow",
-        "Detecting your body..."
-    );
-
-
-    requestAnimationFrame(detectPose);
+        video.videoHeight || 960;
 }
 
 
-/* --------------------------------------------------
+/* ==================================================
+   WAIT FOR VIDEO
+================================================== */
+
+function waitForVideo() {
+
+    return new Promise(
+        (resolve) => {
+
+            if (
+                video.readyState >= 2 &&
+                video.videoWidth > 0
+            ) {
+
+                resolve();
+
+                return;
+            }
+
+
+            video.onloadedmetadata =
+                () => {
+
+                    resolve();
+
+                };
+
+        }
+    );
+}
+
+
+/* ==================================================
+   LOAD MEDIAPIPE
+================================================== */
+
+async function setupPoseDetection() {
+
+    if (poseLandmarker) {
+
+        requestAnimationFrame(
+            detectPose
+        );
+
+        return;
+    }
+
+
+    try {
+
+        /*
+         * Load MediaPipe dynamically.
+         */
+
+        const MediaPipe =
+            await import(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm"
+            );
+
+
+        const FilesetResolver =
+            MediaPipe.FilesetResolver;
+
+        const PoseLandmarker =
+            MediaPipe.PoseLandmarker;
+
+
+        if (
+            !FilesetResolver ||
+            !PoseLandmarker
+        ) {
+
+            throw new Error(
+                "MediaPipe failed to load correctly."
+            );
+        }
+
+
+        /*
+         * Load WASM files.
+         */
+
+        const vision =
+            await FilesetResolver.forVisionTasks(
+
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
+
+            );
+
+
+        /*
+         * Load pose model.
+         */
+
+        poseLandmarker =
+            await PoseLandmarker.createFromOptions(
+
+                vision,
+
+                {
+
+                    baseOptions: {
+
+                        modelAssetPath:
+
+                            "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+
+                        delegate: "CPU"
+
+                    },
+
+
+                    runningMode: "VIDEO",
+
+                    numPoses: 1,
+
+                    minPoseDetectionConfidence: 0.5,
+
+                    minPosePresenceConfidence: 0.5,
+
+                    minTrackingConfidence: 0.5
+
+                }
+
+            );
+
+
+        document
+            .getElementById("instruction")
+            .innerText =
+            "Stand inside the body outline.";
+
+
+        /*
+         * Start pose detection.
+         */
+
+        requestAnimationFrame(
+            detectPose
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "MEDIAPIPE ERROR:",
+            error
+        );
+
+
+        throw new Error(
+            "MediaPipe body detection could not load."
+        );
+    }
+}
+
+
+/* ==================================================
    BODY DETECTION
--------------------------------------------------- */
+================================================== */
 
 async function detectPose(time) {
 
-    if (!poseLandmarker ||
-        video.readyState < 2) {
+    if (
+        !poseLandmarker ||
+        video.readyState < 2
+    ) {
 
-        requestAnimationFrame(detectPose);
+        requestAnimationFrame(
+            detectPose
+        );
 
         return;
     }
@@ -248,56 +452,71 @@ async function detectPose(time) {
         previousTime = time;
 
 
-        const result =
-            poseLandmarker.detectForVideo(
-                video,
-                time
+        try {
+
+            const result =
+                poseLandmarker.detectForVideo(
+                    video,
+                    time
+                );
+
+
+            if (
+                result.landmarks &&
+                result.landmarks.length > 0
+            ) {
+
+                latestLandmarks =
+                    result.landmarks[0];
+
+
+                drawLandmarks(
+                    latestLandmarks
+                );
+
+
+                checkBodyPosition(
+                    latestLandmarks
+                );
+
+
+            } else {
+
+                setStatus(
+                    "red",
+                    "No person detected. Step into the outline."
+                );
+
+
+                personReady = false;
+
+                disableCapture();
+            }
+
+
+        } catch (error) {
+
+            console.error(
+                "POSE ERROR:",
+                error
             );
-
-
-        if (
-            result.landmarks &&
-            result.landmarks.length > 0
-        ) {
-
-            latestLandmarks =
-                result.landmarks[0];
-
-
-            drawLandmarks(
-                latestLandmarks
-            );
-
-
-            checkBodyPosition(
-                latestLandmarks
-            );
-
-        } else {
-
-            setStatus(
-                "red",
-                "No person detected. Step into the outline."
-            );
-
-            personReady = false;
-
-            document.getElementById(
-                "captureButton"
-            ).disabled = true;
         }
     }
 
 
-    requestAnimationFrame(detectPose);
+    requestAnimationFrame(
+        detectPose
+    );
 }
 
 
-/* --------------------------------------------------
-   DRAW LANDMARKS
--------------------------------------------------- */
+/* ==================================================
+   DRAW BODY LANDMARKS
+================================================== */
 
-function drawLandmarks(landmarks) {
+function drawLandmarks(
+    landmarks
+) {
 
     ctx.clearRect(
         0,
@@ -307,52 +526,69 @@ function drawLandmarks(landmarks) {
     );
 
 
-    ctx.fillStyle = "#00ff88";
+    ctx.fillStyle =
+        "#00ff88";
 
 
-    landmarks.forEach(point => {
+    landmarks.forEach(
+        point => {
 
-        const x =
-            point.x * canvas.width;
+            const x =
+                point.x *
+                canvas.width;
 
-        const y =
-            point.y * canvas.height;
+            const y =
+                point.y *
+                canvas.height;
 
 
-        ctx.beginPath();
+            ctx.beginPath();
 
-        ctx.arc(
-            x,
-            y,
-            5,
-            0,
-            Math.PI * 2
-        );
 
-        ctx.fill();
-    });
+            ctx.arc(
+                x,
+                y,
+                5,
+                0,
+                Math.PI * 2
+            );
+
+
+            ctx.fill();
+
+        }
+    );
 }
 
 
-/* --------------------------------------------------
+/* ==================================================
    POSITION CHECK
--------------------------------------------------- */
+================================================== */
 
-function checkBodyPosition(landmarks) {
+function checkBodyPosition(
+    landmarks
+) {
 
-    const nose = landmarks[0];
+    const nose =
+        landmarks[0];
 
-    const leftShoulder = landmarks[11];
+    const leftShoulder =
+        landmarks[11];
 
-    const rightShoulder = landmarks[12];
+    const rightShoulder =
+        landmarks[12];
 
-    const leftHip = landmarks[23];
+    const leftHip =
+        landmarks[23];
 
-    const rightHip = landmarks[24];
+    const rightHip =
+        landmarks[24];
 
-    const leftAnkle = landmarks[27];
+    const leftAnkle =
+        landmarks[27];
 
-    const rightAnkle = landmarks[28];
+    const rightAnkle =
+        landmarks[28];
 
 
     if (
@@ -370,9 +606,13 @@ function checkBodyPosition(landmarks) {
             "Please make sure your whole body is visible."
         );
 
-        personReady = false;
+
+        personReady =
+            false;
+
 
         disableCapture();
+
 
         return;
     }
@@ -390,34 +630,47 @@ function checkBodyPosition(landmarks) {
 
 
     const bodyHeight =
-        bodyBottom - bodyTop;
+        bodyBottom -
+        bodyTop;
 
 
-    if (bodyHeight < 0.65) {
+    if (
+        bodyHeight < 0.65
+    ) {
 
         setStatus(
             "yellow",
             "Move closer to the camera."
         );
 
-        personReady = false;
+
+        personReady =
+            false;
+
 
         disableCapture();
+
 
         return;
     }
 
 
-    if (bodyHeight > 0.95) {
+    if (
+        bodyHeight > 0.95
+    ) {
 
         setStatus(
             "yellow",
             "Move slightly away."
         );
 
-        personReady = false;
+
+        personReady =
+            false;
+
 
         disableCapture();
+
 
         return;
     }
@@ -430,20 +683,30 @@ function checkBodyPosition(landmarks) {
         );
 
 
-    if (shoulderDifference > 0.08) {
+    if (
+        shoulderDifference > 0.08
+    ) {
 
         setStatus(
             "yellow",
             "Please stand straight."
         );
 
-        personReady = false;
+
+        personReady =
+            false;
+
 
         disableCapture();
+
 
         return;
     }
 
+
+    /*
+     * Everything looks good.
+     */
 
     setStatus(
         "green",
@@ -451,144 +714,205 @@ function checkBodyPosition(landmarks) {
     );
 
 
-    personReady = true;
-
-
-    document.getElementById(
-        "captureButton"
-    ).disabled = false;
-}
-
-
-function disableCapture() {
-
-    document.getElementById(
-        "captureButton"
-    ).disabled = true;
-}
-
-
-/* --------------------------------------------------
-   STATUS
--------------------------------------------------- */
-
-function setStatus(color, message) {
-
-    const light =
-        document.getElementById("statusLight");
-
-    const text =
-        document.getElementById("statusText");
-
-
-    if (!light || !text) {
-        return;
-    }
-
-
-    text.innerText = message;
-
-
-    if (color === "green") {
-
-        light.style.background = "#20bf6b";
-
-    } else if (color === "yellow") {
-
-        light.style.background = "#f1b900";
-
-    } else {
-
-        light.style.background = "#eb3b5a";
-    }
-}
-
-
-/* --------------------------------------------------
-   CAPTURE
--------------------------------------------------- */
-
-window.capturePhoto = function () {
-
-    if (!latestLandmarks || !personReady) {
-
-        return;
-    }
-
-
-    stopCamera();
-
-
-    hideAllSections();
+    personReady =
+        true;
 
 
     document
-        .getElementById("processing")
-        .classList.remove("hidden");
+        .getElementById(
+            "captureButton"
+        )
+        .disabled =
+        false;
+}
 
 
-    setTimeout(() => {
+/* ==================================================
+   DISABLE CAPTURE
+================================================== */
 
-        calculateMeasurements(
-            latestLandmarks
+function disableCapture() {
+
+    document
+        .getElementById(
+            "captureButton"
+        )
+        .disabled =
+        true;
+}
+
+
+/* ==================================================
+   STATUS
+================================================== */
+
+function setStatus(
+    color,
+    message
+) {
+
+    const light =
+        document.getElementById(
+            "statusLight"
         );
 
-    }, 1800);
-};
+    const text =
+        document.getElementById(
+            "statusText"
+        );
 
 
-/* --------------------------------------------------
+    if (!light || !text) {
+
+        return;
+    }
+
+
+    text.innerText =
+        message;
+
+
+    if (
+        color === "green"
+    ) {
+
+        light.style.background =
+            "#20bf6b";
+
+    } else if (
+        color === "yellow"
+    ) {
+
+        light.style.background =
+            "#f1b900";
+
+    } else {
+
+        light.style.background =
+            "#eb3b5a";
+    }
+}
+
+
+/* ==================================================
+   CAPTURE
+================================================== */
+
+window.capturePhoto =
+    function () {
+
+        if (
+            !latestLandmarks ||
+            !personReady
+        ) {
+
+            return;
+        }
+
+
+        stopCamera();
+
+
+        hideAllSections();
+
+
+        document
+            .getElementById(
+                "processing"
+            )
+            .classList
+            .remove("hidden");
+
+
+        setTimeout(
+            () => {
+
+                calculateMeasurements(
+                    latestLandmarks
+                );
+
+            },
+
+            1800
+        );
+    };
+
+
+/* ==================================================
    STOP CAMERA
--------------------------------------------------- */
+================================================== */
 
 function stopCamera() {
 
     if (stream) {
 
-        stream.getTracks().forEach(
-            track => track.stop()
-        );
+        stream
+            .getTracks()
+            .forEach(
+                track => {
 
-        stream = null;
+                    track.stop();
+
+                }
+            );
+
+
+        stream =
+            null;
     }
 }
 
 
-/* --------------------------------------------------
+/* ==================================================
    MEASUREMENTS
--------------------------------------------------- */
+================================================== */
 
-function calculateMeasurements(landmarks) {
+function calculateMeasurements(
+    landmarks
+) {
 
     const knownHeight =
         studentData.height;
 
 
-    const nose = landmarks[0];
+    const nose =
+        landmarks[0];
 
-    const leftShoulder = landmarks[11];
+    const leftShoulder =
+        landmarks[11];
 
-    const rightShoulder = landmarks[12];
+    const rightShoulder =
+        landmarks[12];
 
-    const leftElbow = landmarks[13];
+    const leftElbow =
+        landmarks[13];
 
-    const rightElbow = landmarks[14];
+    const rightElbow =
+        landmarks[14];
 
-    const leftWrist = landmarks[15];
+    const leftWrist =
+        landmarks[15];
 
-    const rightWrist = landmarks[16];
+    const rightWrist =
+        landmarks[16];
 
-    const leftHip = landmarks[23];
+    const leftHip =
+        landmarks[23];
 
-    const rightHip = landmarks[24];
+    const rightHip =
+        landmarks[24];
 
-    const leftKnee = landmarks[25];
+    const leftKnee =
+        landmarks[25];
 
-    const rightKnee = landmarks[26];
+    const rightKnee =
+        landmarks[26];
 
-    const leftAnkle = landmarks[27];
+    const leftAnkle =
+        landmarks[27];
 
-    const rightAnkle = landmarks[28];
+    const rightAnkle =
+        landmarks[28];
 
 
     const top =
@@ -603,16 +927,22 @@ function calculateMeasurements(landmarks) {
 
 
     const pixelHeight =
-        bottom - top;
+        bottom -
+        top;
 
 
-    function distance(a, b) {
+    function distance(
+        a,
+        b
+    ) {
 
         const dx =
-            a.x - b.x;
+            a.x -
+            b.x;
 
         const dy =
-            a.y - b.y;
+            a.y -
+            b.y;
 
 
         return Math.sqrt(
@@ -622,12 +952,16 @@ function calculateMeasurements(landmarks) {
     }
 
 
-    function cmDistance(a, b) {
+    function cmDistance(
+        a,
+        b
+    ) {
 
         return (
             distance(a, b) /
             pixelHeight
-        ) * knownHeight;
+        ) *
+        knownHeight;
     }
 
 
@@ -661,7 +995,10 @@ function calculateMeasurements(landmarks) {
 
 
     const arm =
-        (leftArm + rightArm) / 2;
+        (
+            leftArm +
+            rightArm
+        ) / 2;
 
 
     const leftLeg =
@@ -687,8 +1024,17 @@ function calculateMeasurements(landmarks) {
 
 
     const inseam =
-        ((leftLeg + rightLeg) / 2) * 0.88;
+        (
+            (
+                leftLeg +
+                rightLeg
+            ) / 2
+        ) * 0.88;
 
+
+    /*
+     * Prototype estimates.
+     */
 
     const chest =
         shoulder * 2.15;
@@ -698,40 +1044,56 @@ function calculateMeasurements(landmarks) {
         shoulder * 1.75;
 
 
+    /*
+     * Display results.
+     */
+
     document.getElementById(
         "heightResult"
     ).innerText =
-        round(knownHeight) + " cm";
+        round(
+            knownHeight
+        ) + " cm";
 
 
     document.getElementById(
         "shoulderResult"
     ).innerText =
-        round(shoulder) + " cm";
+        round(
+            shoulder
+        ) + " cm";
 
 
     document.getElementById(
         "armResult"
     ).innerText =
-        round(arm) + " cm";
+        round(
+            arm
+        ) + " cm";
 
 
     document.getElementById(
         "inseamResult"
     ).innerText =
-        round(inseam) + " cm";
+        round(
+            inseam
+        ) + " cm";
 
 
     document.getElementById(
         "chestResult"
     ).innerText =
-        round(chest) + " cm";
+        round(
+            chest
+        ) + " cm";
 
 
     document.getElementById(
         "waistResult"
     ).innerText =
-        round(waist) + " cm";
+        round(
+            waist
+        ) + " cm";
 
 
     const uniformSize =
@@ -757,14 +1119,17 @@ function calculateMeasurements(landmarks) {
 
 
     document
-        .getElementById("results")
-        .classList.remove("hidden");
+        .getElementById(
+            "results"
+        )
+        .classList
+        .remove("hidden");
 }
 
 
-/* --------------------------------------------------
+/* ==================================================
    UNIFORM SIZE
--------------------------------------------------- */
+================================================== */
 
 function calculateUniformSize(
     chest,
@@ -772,36 +1137,48 @@ function calculateUniformSize(
 ) {
 
     if (chest < 70) {
+
         return "28";
+
     }
 
     if (chest < 76) {
+
         return "30";
+
     }
 
     if (chest < 82) {
+
         return "32";
+
     }
 
     if (chest < 88) {
+
         return "34";
+
     }
 
     if (chest < 94) {
+
         return "36";
     }
+
 
     return "38+";
 }
 
 
-/* --------------------------------------------------
+/* ==================================================
    ROUNDING
--------------------------------------------------- */
+================================================== */
 
-function round(number) {
+function round(
+    number
+) {
 
     return Math.round(
         number * 10
     ) / 10;
-}
+       }
