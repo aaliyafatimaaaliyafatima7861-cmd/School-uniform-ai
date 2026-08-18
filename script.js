@@ -1,28 +1,53 @@
+import {
+    FilesetResolver,
+    PoseLandmarker
+} from "https://unpkg.com/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs";
+
+
 let poseLandmarker = null;
 
 let video = document.getElementById("camera");
+
 let canvas = document.getElementById("poseCanvas");
+
 let ctx = canvas.getContext("2d");
 
 let stream = null;
+
 let latestLandmarks = null;
+
 let studentData = {};
+
 let personReady = false;
+
 let previousTime = -1;
-let detectionStarted = false;
 
 
-/* ==================================================
+/* ==========================================
    PAGE NAVIGATION
-================================================== */
+========================================== */
 
 function hideAllSections() {
 
-    document.getElementById("intro").classList.add("hidden");
-    document.getElementById("studentForm").classList.add("hidden");
-    document.getElementById("cameraSection").classList.add("hidden");
-    document.getElementById("processing").classList.add("hidden");
-    document.getElementById("results").classList.add("hidden");
+    document
+        .getElementById("intro")
+        .classList.add("hidden");
+
+    document
+        .getElementById("studentForm")
+        .classList.add("hidden");
+
+    document
+        .getElementById("cameraSection")
+        .classList.add("hidden");
+
+    document
+        .getElementById("processing")
+        .classList.add("hidden");
+
+    document
+        .getElementById("results")
+        .classList.add("hidden");
 }
 
 
@@ -30,41 +55,63 @@ window.showStudentForm = function () {
 
     hideAllSections();
 
-    document.getElementById("studentForm")
+    document
+        .getElementById("studentForm")
         .classList.remove("hidden");
 };
 
 
-/* ==================================================
-   START
-================================================== */
+/* ==========================================
+   START CAMERA
+========================================== */
 
 window.startCamera = async function () {
 
     const name =
-        document.getElementById("studentName").value.trim();
+        document
+            .getElementById("studentName")
+            .value
+            .trim();
 
     const id =
-        document.getElementById("studentId").value.trim();
+        document
+            .getElementById("studentId")
+            .value
+            .trim();
 
     const studentClass =
-        document.getElementById("studentClass").value.trim();
+        document
+            .getElementById("studentClass")
+            .value
+            .trim();
 
     const height =
         parseFloat(
-            document.getElementById("studentHeight").value
+            document
+                .getElementById("studentHeight")
+                .value
         );
 
 
-    if (!name || !id || !studentClass || !height) {
+    if (
+        !name ||
+        !id ||
+        !studentClass ||
+        !height
+    ) {
 
-        alert("Please fill all student details.");
+        alert(
+            "Please fill all student details."
+        );
 
         return;
     }
 
 
-    if (height < 80 || height > 220) {
+    if (
+        height < 80 ||
+        height > 220
+    ) {
 
         alert(
             "Please enter a realistic height between 80 and 220 cm."
@@ -75,17 +122,23 @@ window.startCamera = async function () {
 
 
     studentData = {
+
         name: name,
+
         id: id,
+
         className: studentClass,
+
         height: height
     };
 
 
     hideAllSections();
 
-    document.getElementById("cameraSection")
-        .classList.remove("hidden");
+    document
+        .getElementById("cameraSection")
+        .classList
+        .remove("hidden");
 
 
     setStatus(
@@ -100,67 +153,59 @@ window.startCamera = async function () {
 
         setStatus(
             "yellow",
-            "Camera works ✓ Loading AI..."
+            "Camera working ✓ Loading AI..."
         );
 
-        await setupPoseDetection();
+
+        await loadAI();
+
 
         setStatus(
             "yellow",
             "AI loaded ✓ Detecting body..."
         );
 
-    } catch (error) {
 
-        console.error(error);
+        requestAnimationFrame(
+            detectPose
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "SYSTEM ERROR:",
+            error
+        );
+
 
         stopCamera();
 
-        showError(error);
+
+        setStatus(
+            "red",
+            "AI could not start."
+        );
+
+
+        document
+            .getElementById("instruction")
+            .innerText =
+            "AI system could not start.";
+
+
+        alert(
+            "AI body detection could not load.\n\n" +
+            error.message
+        );
     }
 };
 
 
-/* ==================================================
-   ERROR DISPLAY
-================================================== */
-
-function showError(error) {
-
-    const instruction =
-        document.getElementById("instruction");
-
-    const statusText =
-        document.getElementById("statusText");
-
-    const statusLight =
-        document.getElementById("statusLight");
-
-
-    instruction.innerText =
-        "❌ AI SYSTEM ERROR";
-
-
-    statusLight.style.background =
-        "#eb3b5a";
-
-
-    statusText.innerText =
-        "AI body detection could not load.\n\n" +
-        "Error: " +
-        (error.message || error);
-
-
-    alert(
-        "AI body detection could not load.\n\n" +
-        (error.message || error)
-    );
-}
-
-
-/* ==================================================
-   CAMERA
-================================================== */
+/* ==========================================
+   OPEN CAMERA
+========================================== */
 
 async function openCamera() {
 
@@ -170,38 +215,40 @@ async function openCamera() {
     ) {
 
         throw new Error(
-            "Camera API is not supported by this browser."
+            "Camera API is not supported."
         );
     }
 
 
     stream =
-        await navigator.mediaDevices.getUserMedia({
+        await navigator
+            .mediaDevices
+            .getUserMedia({
 
-            video: {
+                video: {
 
-                facingMode: "user",
+                    facingMode: "user",
 
-                width: {
-                    ideal: 720
+                    width: {
+                        ideal: 720
+                    },
+
+                    height: {
+                        ideal: 960
+                    }
+
                 },
 
-                height: {
-                    ideal: 960
-                }
+                audio: false
 
-            },
-
-            audio: false
-        });
+            });
 
 
     video.srcObject = stream;
 
     video.muted = true;
-    video.playsInline = true;
-    video.autoplay = true;
 
+    video.playsInline = true;
 
     await video.play();
 
@@ -217,14 +264,14 @@ async function openCamera() {
 }
 
 
-/* ==================================================
+/* ==========================================
    WAIT FOR VIDEO
-================================================== */
+========================================== */
 
 function waitForVideo() {
 
     return new Promise(
-        (resolve, reject) => {
+        (resolve) => {
 
             if (
                 video.readyState >= 2 &&
@@ -237,114 +284,36 @@ function waitForVideo() {
             }
 
 
-            const timeout =
-                setTimeout(
-                    () => {
-
-                        reject(
-                            new Error(
-                                "Camera opened but video could not be initialized."
-                            )
-                        );
-
-                    },
-                    10000
-                );
-
-
             video.onloadedmetadata =
                 function () {
-
-                    clearTimeout(timeout);
 
                     resolve();
 
                 };
+
         }
     );
 }
 
 
-/* ==================================================
-   MEDIAPIPE
-================================================== */
+/* ==========================================
+   LOAD MEDIAPIPE AI
+========================================== */
 
-async function setupPoseDetection() {
+async function loadAI() {
 
-    /*
-     * Load MediaPipe directly.
-     */
+    const vision =
+        await FilesetResolver
+            .forVisionTasks(
 
-    let module;
-
-
-    try {
-
-        module =
-            await import(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm"
-            );
-
-    } catch (error) {
-
-        throw new Error(
-            "MediaPipe JavaScript package could not be downloaded.\n\n" +
-            error.message
-        );
-    }
-
-
-    const FilesetResolver =
-        module.FilesetResolver;
-
-    const PoseLandmarker =
-        module.PoseLandmarker;
-
-
-    if (
-        !FilesetResolver ||
-        !PoseLandmarker
-    ) {
-
-        throw new Error(
-            "MediaPipe loaded incorrectly. PoseLandmarker was not found."
-        );
-    }
-
-
-    /*
-     * Load MediaPipe WASM.
-     */
-
-    let vision;
-
-
-    try {
-
-        vision =
-            await FilesetResolver.forVisionTasks(
-
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
+                "https://unpkg.com/@mediapipe/tasks-vision@0.10.22/wasm"
 
             );
 
-    } catch (error) {
 
-        throw new Error(
-            "MediaPipe AI engine could not load.\n\n" +
-            error.message
-        );
-    }
-
-
-    /*
-     * Load pose model.
-     */
-
-    try {
-
-        poseLandmarker =
-            await PoseLandmarker.createFromOptions(
+    poseLandmarker =
+        await PoseLandmarker
+            .createFromOptions(
 
                 vision,
 
@@ -353,6 +322,7 @@ async function setupPoseDetection() {
                     baseOptions: {
 
                         modelAssetPath:
+
                             "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
 
                         delegate: "CPU"
@@ -373,42 +343,17 @@ async function setupPoseDetection() {
 
             );
 
-    } catch (error) {
 
-        throw new Error(
-            "The body detection model could not load.\n\n" +
-            error.message
-        );
-    }
-
-
-    document.getElementById("instruction")
+    document
+        .getElementById("instruction")
         .innerText =
         "Stand inside the body outline.";
-
-
-    startDetection();
 }
 
 
-/* ==================================================
+/* ==========================================
    BODY DETECTION
-================================================== */
-
-function startDetection() {
-
-    if (detectionStarted) {
-        return;
-    }
-
-
-    detectionStarted = true;
-
-    previousTime = -1;
-
-    requestAnimationFrame(detectPose);
-}
-
+========================================== */
 
 async function detectPose(time) {
 
@@ -417,13 +362,17 @@ async function detectPose(time) {
         video.readyState < 2
     ) {
 
-        requestAnimationFrame(detectPose);
+        requestAnimationFrame(
+            detectPose
+        );
 
         return;
     }
 
 
-    if (time !== previousTime) {
+    if (
+        time !== previousTime
+    ) {
 
         previousTime = time;
 
@@ -431,10 +380,11 @@ async function detectPose(time) {
         try {
 
             const result =
-                poseLandmarker.detectForVideo(
-                    video,
-                    time
-                );
+                poseLandmarker
+                    .detectForVideo(
+                        video,
+                        time
+                    );
 
 
             if (
@@ -455,7 +405,9 @@ async function detectPose(time) {
                     latestLandmarks
                 );
 
-            } else {
+            }
+
+            else {
 
                 setStatus(
                     "red",
@@ -467,25 +419,32 @@ async function detectPose(time) {
                 disableCapture();
             }
 
-        } catch (error) {
+        }
+
+        catch (error) {
 
             console.error(
                 "Pose detection error:",
                 error
             );
+
         }
     }
 
 
-    requestAnimationFrame(detectPose);
+    requestAnimationFrame(
+        detectPose
+    );
 }
 
 
-/* ==================================================
-   DRAW LANDMARKS
-================================================== */
+/* ==========================================
+   DRAW BODY POINTS
+========================================== */
 
-function drawLandmarks(landmarks) {
+function drawLandmarks(
+    landmarks
+) {
 
     ctx.clearRect(
         0,
@@ -499,49 +458,65 @@ function drawLandmarks(landmarks) {
         "#00ff88";
 
 
-    landmarks.forEach(point => {
+    landmarks.forEach(
+        point => {
 
-        const x =
-            point.x * canvas.width;
+            const x =
+                point.x *
+                canvas.width;
 
-        const y =
-            point.y * canvas.height;
+            const y =
+                point.y *
+                canvas.height;
 
 
-        ctx.beginPath();
+            ctx.beginPath();
 
-        ctx.arc(
-            x,
-            y,
-            5,
-            0,
-            Math.PI * 2
-        );
 
-        ctx.fill();
-    });
+            ctx.arc(
+                x,
+                y,
+                5,
+                0,
+                Math.PI * 2
+            );
+
+
+            ctx.fill();
+
+        }
+    );
 }
 
 
-/* ==================================================
-   POSITION
-================================================== */
+/* ==========================================
+   CHECK POSITION
+========================================== */
 
-function checkBodyPosition(landmarks) {
+function checkBodyPosition(
+    landmarks
+) {
 
-    const nose = landmarks[0];
+    const nose =
+        landmarks[0];
 
-    const leftShoulder = landmarks[11];
+    const leftShoulder =
+        landmarks[11];
 
-    const rightShoulder = landmarks[12];
+    const rightShoulder =
+        landmarks[12];
 
-    const leftHip = landmarks[23];
+    const leftHip =
+        landmarks[23];
 
-    const rightHip = landmarks[24];
+    const rightHip =
+        landmarks[24];
 
-    const leftAnkle = landmarks[27];
+    const leftAnkle =
+        landmarks[27];
 
-    const rightAnkle = landmarks[28];
+    const rightAnkle =
+        landmarks[28];
 
 
     if (
@@ -556,7 +531,7 @@ function checkBodyPosition(landmarks) {
 
         setStatus(
             "red",
-            "Please make sure your whole body is visible."
+            "Make sure your whole body is visible."
         );
 
         personReady = false;
@@ -579,10 +554,13 @@ function checkBodyPosition(landmarks) {
 
 
     const bodyHeight =
-        bodyBottom - bodyTop;
+        bodyBottom -
+        bodyTop;
 
 
-    if (bodyHeight < 0.65) {
+    if (
+        bodyHeight < 0.65
+    ) {
 
         setStatus(
             "yellow",
@@ -597,7 +575,9 @@ function checkBodyPosition(landmarks) {
     }
 
 
-    if (bodyHeight > 0.95) {
+    if (
+        bodyHeight > 0.95
+    ) {
 
         setStatus(
             "yellow",
@@ -619,7 +599,9 @@ function checkBodyPosition(landmarks) {
         );
 
 
-    if (shoulderDifference > 0.08) {
+    if (
+        shoulderDifference > 0.08
+    ) {
 
         setStatus(
             "yellow",
@@ -643,23 +625,23 @@ function checkBodyPosition(landmarks) {
     personReady = true;
 
 
-    document.getElementById(
-        "captureButton"
-    ).disabled = false;
+    document
+        .getElementById("captureButton")
+        .disabled = false;
 }
 
 
 function disableCapture() {
 
-    document.getElementById(
-        "captureButton"
-    ).disabled = true;
+    document
+        .getElementById("captureButton")
+        .disabled = true;
 }
 
 
-/* ==================================================
+/* ==========================================
    STATUS
-================================================== */
+========================================== */
 
 function setStatus(
     color,
@@ -667,13 +649,19 @@ function setStatus(
 ) {
 
     const light =
-        document.getElementById("statusLight");
+        document
+            .getElementById("statusLight");
 
     const text =
-        document.getElementById("statusText");
+        document
+            .getElementById("statusText");
 
 
-    if (!light || !text) {
+    if (
+        !light ||
+        !text
+    ) {
+
         return;
     }
 
@@ -682,17 +670,25 @@ function setStatus(
         message;
 
 
-    if (color === "green") {
+    if (
+        color === "green"
+    ) {
 
         light.style.background =
             "#20bf6b";
 
-    } else if (color === "yellow") {
+    }
+
+    else if (
+        color === "yellow"
+    ) {
 
         light.style.background =
             "#f1b900";
 
-    } else {
+    }
+
+    else {
 
         light.style.background =
             "#eb3b5a";
@@ -700,11 +696,12 @@ function setStatus(
 }
 
 
-/* ==================================================
+/* ==========================================
    CAPTURE
-================================================== */
+========================================== */
 
-window.capturePhoto = function () {
+window.capturePhoto =
+function () {
 
     if (
         !latestLandmarks ||
@@ -715,35 +712,38 @@ window.capturePhoto = function () {
     }
 
 
+    const savedLandmarks =
+        latestLandmarks;
+
+
     stopCamera();
 
 
     hideAllSections();
 
 
-    document.getElementById(
-        "processing"
-    )
+    document
+        .getElementById("processing")
         .classList
         .remove("hidden");
 
 
     setTimeout(
-        () => {
+        function () {
 
             calculateMeasurements(
-                latestLandmarks
+                savedLandmarks
             );
 
         },
-        1800
+        1200
     );
 };
 
 
-/* ==================================================
+/* ==========================================
    STOP CAMERA
-================================================== */
+========================================== */
 
 function stopCamera() {
 
@@ -751,53 +751,65 @@ function stopCamera() {
 
         stream
             .getTracks()
-            .forEach(track => {
-                track.stop();
-            });
+            .forEach(
+                track => track.stop()
+            );
 
         stream = null;
     }
-
-
-    detectionStarted = false;
 }
 
 
-/* ==================================================
+/* ==========================================
    MEASUREMENTS
-================================================== */
+========================================== */
 
-function calculateMeasurements(landmarks) {
+function calculateMeasurements(
+    landmarks
+) {
 
     const knownHeight =
         studentData.height;
 
 
-    const nose = landmarks[0];
+    const nose =
+        landmarks[0];
 
-    const leftShoulder = landmarks[11];
+    const leftShoulder =
+        landmarks[11];
 
-    const rightShoulder = landmarks[12];
+    const rightShoulder =
+        landmarks[12];
 
-    const leftElbow = landmarks[13];
+    const leftElbow =
+        landmarks[13];
 
-    const rightElbow = landmarks[14];
+    const rightElbow =
+        landmarks[14];
 
-    const leftWrist = landmarks[15];
+    const leftWrist =
+        landmarks[15];
 
-    const rightWrist = landmarks[16];
+    const rightWrist =
+        landmarks[16];
 
-    const leftHip = landmarks[23];
+    const leftHip =
+        landmarks[23];
 
-    const rightHip = landmarks[24];
+    const rightHip =
+        landmarks[24];
 
-    const leftKnee = landmarks[25];
+    const leftKnee =
+        landmarks[25];
 
-    const rightKnee = landmarks[26];
+    const rightKnee =
+        landmarks[26];
 
-    const leftAnkle = landmarks[27];
+    const leftAnkle =
+        landmarks[27];
 
-    const rightAnkle = landmarks[28];
+    const rightAnkle =
+        landmarks[28];
 
 
     const top =
@@ -815,7 +827,10 @@ function calculateMeasurements(landmarks) {
         bottom - top;
 
 
-    function distance(a, b) {
+    function distance(
+        a,
+        b
+    ) {
 
         const dx =
             a.x - b.x;
@@ -831,12 +846,16 @@ function calculateMeasurements(landmarks) {
     }
 
 
-    function cmDistance(a, b) {
+    function cmDistance(
+        a,
+        b
+    ) {
 
         return (
             distance(a, b) /
             pixelHeight
-        ) * knownHeight;
+        ) *
+        knownHeight;
     }
 
 
@@ -870,7 +889,10 @@ function calculateMeasurements(landmarks) {
 
 
     const arm =
-        (leftArm + rightArm) / 2;
+        (
+            leftArm +
+            rightArm
+        ) / 2;
 
 
     const leftLeg =
@@ -896,13 +918,14 @@ function calculateMeasurements(landmarks) {
 
 
     const inseam =
-        ((leftLeg + rightLeg) / 2) * 0.88;
+        (
+            (leftLeg + rightLeg) / 2
+        ) * 0.88;
 
 
     /*
-     * Prototype estimates.
-     * These are NOT tailor-accurate.
-     */
+       Prototype estimates only.
+    */
 
     const chest =
         shoulder * 2.15;
@@ -912,40 +935,46 @@ function calculateMeasurements(landmarks) {
         shoulder * 1.75;
 
 
-    document.getElementById(
-        "heightResult"
-    ).innerText =
-        round(knownHeight) + " cm";
+    document
+        .getElementById("heightResult")
+        .innerText =
+        round(knownHeight) +
+        " cm";
 
 
-    document.getElementById(
-        "shoulderResult"
-    ).innerText =
-        round(shoulder) + " cm";
+    document
+        .getElementById("shoulderResult")
+        .innerText =
+        round(shoulder) +
+        " cm";
 
 
-    document.getElementById(
-        "armResult"
-    ).innerText =
-        round(arm) + " cm";
+    document
+        .getElementById("armResult")
+        .innerText =
+        round(arm) +
+        " cm";
 
 
-    document.getElementById(
-        "inseamResult"
-    ).innerText =
-        round(inseam) + " cm";
+    document
+        .getElementById("inseamResult")
+        .innerText =
+        round(inseam) +
+        " cm";
 
 
-    document.getElementById(
-        "chestResult"
-    ).innerText =
-        round(chest) + " cm";
+    document
+        .getElementById("chestResult")
+        .innerText =
+        round(chest) +
+        " cm";
 
 
-    document.getElementById(
-        "waistResult"
-    ).innerText =
-        round(waist) + " cm";
+    document
+        .getElementById("waistResult")
+        .innerText =
+        round(waist) +
+        " cm";
 
 
     const uniformSize =
@@ -955,55 +984,63 @@ function calculateMeasurements(landmarks) {
         );
 
 
-    document.getElementById(
-        "uniformSize"
-    ).innerText =
+    document
+        .getElementById("uniformSize")
+        .innerText =
         uniformSize;
 
 
-    document.getElementById(
-        "resultStudent"
-    ).innerText =
+    document
+        .getElementById("resultStudent")
+        .innerText =
         `${studentData.name} • ${studentData.className}`;
 
 
     hideAllSections();
 
 
-    document.getElementById("results")
+    document
+        .getElementById("results")
         .classList
         .remove("hidden");
 }
 
 
-/* ==================================================
+/* ==========================================
    UNIFORM SIZE
-================================================== */
+========================================== */
 
 function calculateUniformSize(
     chest,
     waist
 ) {
 
-    if (chest < 70) return "28";
+    if (chest < 70)
+        return "28";
 
-    if (chest < 76) return "30";
+    if (chest < 76)
+        return "30";
 
-    if (chest < 82) return "32";
+    if (chest < 82)
+        return "32";
 
-    if (chest < 88) return "34";
+    if (chest < 88)
+        return "34";
 
-    if (chest < 94) return "36";
+    if (chest < 94)
+        return "36";
 
     return "38+";
 }
 
 
-/* ==================================================
-   ROUND
-================================================== */
+/* ==========================================
+   ROUNDING
+========================================== */
 
-function round(number) {
+function round(
+    number
+) {
 
     return Math.round(
         number * 10
