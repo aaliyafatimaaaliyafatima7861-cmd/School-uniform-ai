@@ -9,6 +9,7 @@ let latestLandmarks = null;
 let studentData = {};
 let personReady = false;
 let previousTime = -1;
+let detectionStarted = false;
 
 
 /* ==================================================
@@ -36,7 +37,7 @@ window.showStudentForm = function () {
 
 
 /* ==================================================
-   START CAMERA PROCESS
+   START MEASUREMENT
 ================================================== */
 
 window.startCamera = async function () {
@@ -55,8 +56,6 @@ window.startCamera = async function () {
             document.getElementById("studentHeight").value
         );
 
-
-    /* CHECK DETAILS */
 
     if (!name || !id || !studentClass || !height) {
 
@@ -79,17 +78,12 @@ window.startCamera = async function () {
     studentData = {
 
         name: name,
-
         id: id,
-
         className: studentClass,
-
         height: height
 
     };
 
-
-    /* SHOW CAMERA SCREEN */
 
     hideAllSections();
 
@@ -106,99 +100,69 @@ window.startCamera = async function () {
 
     try {
 
-        /*
-         * IMPORTANT:
-         * Camera is opened BEFORE MediaPipe.
-         */
+        /* CAMERA FIRST */
 
         await openCamera();
 
 
         setStatus(
             "yellow",
-            "Loading body detection..."
+            "Camera ready. Loading AI..."
         );
 
+
+        /* THEN AI */
 
         await setupPoseDetection();
 
 
         setStatus(
             "yellow",
-            "Detecting your body..."
+            "AI ready. Detecting body..."
         );
 
 
     } catch (error) {
 
         console.error(
-            "STARTUP ERROR:",
+            "SYSTEM ERROR:",
             error
         );
 
 
+        stopCamera();
+
+
         let message =
-            "Something went wrong.";
+            "The AI body detection could not start.";
 
 
         if (
-            error.name ===
-            "NotAllowedError"
-        ) {
-
-            message =
-                "Camera permission was denied. Please allow camera access for this website in your browser settings.";
-
-        } else if (
-            error.name ===
-            "NotFoundError"
-        ) {
-
-            message =
-                "No camera was found on this device.";
-
-        } else if (
-            error.name ===
-            "NotReadableError"
-        ) {
-
-            message =
-                "The camera is already being used by another application.";
-
-        } else if (
             error.message &&
             error.message.includes("MediaPipe")
         ) {
 
             message =
-                "The camera works, but the AI body-detection model could not load. Please check your internet connection.";
+                "Camera works, but the AI body detection model could not load. Please check your internet connection or try Chrome again.";
 
-        } else if (
-            error.message
-        ) {
-
-            message =
-                error.message;
         }
 
 
         alert(message);
 
 
-        stopCamera();
-
-
         hideAllSections();
 
         document
             .getElementById("studentForm")
-            .classList.remove("hidden");
+            .classList
+            .remove("hidden");
     }
 };
 
 
 /* ==================================================
-   OPEN CAMERA
+   CAMERA
 ================================================== */
 
 async function openCamera() {
@@ -209,14 +173,10 @@ async function openCamera() {
     ) {
 
         throw new Error(
-            "Camera access is not supported by this browser."
+            "Camera API is not supported."
         );
     }
 
-
-    /*
-     * Request camera permission.
-     */
 
     stream =
         await navigator.mediaDevices.getUserMedia({
@@ -240,25 +200,21 @@ async function openCamera() {
         });
 
 
-    /*
-     * Connect camera to video element.
-     */
+    video.srcObject =
+        stream;
 
-    video.srcObject = stream;
+    video.muted =
+        true;
 
-    video.muted = true;
+    video.playsInline =
+        true;
 
-    video.playsInline = true;
-
-    video.autoplay = true;
+    video.autoplay =
+        true;
 
 
     await video.play();
 
-
-    /*
-     * Wait until camera gives us dimensions.
-     */
 
     await waitForVideo();
 
@@ -272,7 +228,7 @@ async function openCamera() {
 
 
 /* ==================================================
-   WAIT FOR VIDEO
+   WAIT FOR CAMERA
 ================================================== */
 
 function waitForVideo() {
@@ -292,12 +248,11 @@ function waitForVideo() {
 
 
             video.onloadedmetadata =
-                () => {
+                function () {
 
                     resolve();
 
                 };
-
         }
     );
 }
@@ -311,9 +266,7 @@ async function setupPoseDetection() {
 
     if (poseLandmarker) {
 
-        requestAnimationFrame(
-            detectPose
-        );
+        startDetection();
 
         return;
     }
@@ -321,37 +274,49 @@ async function setupPoseDetection() {
 
     try {
 
+        setStatus(
+            "yellow",
+            "Downloading AI body model..."
+        );
+
+
         /*
-         * Load MediaPipe dynamically.
+         * Load MediaPipe package.
          */
 
-        const MediaPipe =
+        const module =
             await import(
                 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm"
             );
 
 
-        const FilesetResolver =
-            MediaPipe.FilesetResolver;
-
-        const PoseLandmarker =
-            MediaPipe.PoseLandmarker;
-
-
         if (
-            !FilesetResolver ||
-            !PoseLandmarker
+            !module.FilesetResolver ||
+            !module.PoseLandmarker
         ) {
 
             throw new Error(
-                "MediaPipe failed to load correctly."
+                "MediaPipe package did not load correctly."
             );
         }
 
 
+        const FilesetResolver =
+            module.FilesetResolver;
+
+        const PoseLandmarker =
+            module.PoseLandmarker;
+
+
         /*
-         * Load WASM files.
+         * Load MediaPipe WASM runtime.
          */
+
+        setStatus(
+            "yellow",
+            "Loading AI engine..."
+        );
+
 
         const vision =
             await FilesetResolver.forVisionTasks(
@@ -362,8 +327,14 @@ async function setupPoseDetection() {
 
 
         /*
-         * Load pose model.
+         * Load actual pose model.
          */
+
+        setStatus(
+            "yellow",
+            "Loading body detection model..."
+        );
+
 
         poseLandmarker =
             await PoseLandmarker.createFromOptions(
@@ -398,19 +369,21 @@ async function setupPoseDetection() {
             );
 
 
+        if (!poseLandmarker) {
+
+            throw new Error(
+                "MediaPipe model was not created."
+            );
+        }
+
+
         document
             .getElementById("instruction")
             .innerText =
             "Stand inside the body outline.";
 
 
-        /*
-         * Start pose detection.
-         */
-
-        requestAnimationFrame(
-            detectPose
-        );
+        startDetection();
 
 
     } catch (error) {
@@ -422,14 +395,39 @@ async function setupPoseDetection() {
 
 
         throw new Error(
-            "MediaPipe body detection could not load."
+            "MediaPipe model could not load."
         );
     }
 }
 
 
 /* ==================================================
-   BODY DETECTION
+   START DETECTION
+================================================== */
+
+function startDetection() {
+
+    if (detectionStarted) {
+        return;
+    }
+
+
+    detectionStarted =
+        true;
+
+
+    previousTime =
+        -1;
+
+
+    requestAnimationFrame(
+        detectPose
+    );
+}
+
+
+/* ==================================================
+   DETECT BODY
 ================================================== */
 
 async function detectPose(time) {
@@ -447,9 +445,12 @@ async function detectPose(time) {
     }
 
 
-    if (time !== previousTime) {
+    if (
+        time !== previousTime
+    ) {
 
-        previousTime = time;
+        previousTime =
+            time;
 
 
         try {
@@ -488,7 +489,9 @@ async function detectPose(time) {
                 );
 
 
-                personReady = false;
+                personReady =
+                    false;
+
 
                 disableCapture();
             }
@@ -497,7 +500,7 @@ async function detectPose(time) {
         } catch (error) {
 
             console.error(
-                "POSE ERROR:",
+                "Detection error:",
                 error
             );
         }
@@ -511,7 +514,7 @@ async function detectPose(time) {
 
 
 /* ==================================================
-   DRAW BODY LANDMARKS
+   DRAW LANDMARKS
 ================================================== */
 
 function drawLandmarks(
@@ -544,7 +547,6 @@ function drawLandmarks(
 
             ctx.beginPath();
 
-
             ctx.arc(
                 x,
                 y,
@@ -552,7 +554,6 @@ function drawLandmarks(
                 0,
                 Math.PI * 2
             );
-
 
             ctx.fill();
 
@@ -562,7 +563,7 @@ function drawLandmarks(
 
 
 /* ==================================================
-   POSITION CHECK
+   BODY POSITION
 ================================================== */
 
 function checkBodyPosition(
@@ -613,7 +614,6 @@ function checkBodyPosition(
 
         disableCapture();
 
-
         return;
     }
 
@@ -650,7 +650,6 @@ function checkBodyPosition(
 
         disableCapture();
 
-
         return;
     }
 
@@ -670,7 +669,6 @@ function checkBodyPosition(
 
 
         disableCapture();
-
 
         return;
     }
@@ -699,14 +697,9 @@ function checkBodyPosition(
 
         disableCapture();
 
-
         return;
     }
 
-
-    /*
-     * Everything looks good.
-     */
 
     setStatus(
         "green",
@@ -763,7 +756,6 @@ function setStatus(
 
 
     if (!light || !text) {
-
         return;
     }
 
@@ -825,7 +817,7 @@ window.capturePhoto =
 
 
         setTimeout(
-            () => {
+            function () {
 
                 calculateMeasurements(
                     latestLandmarks
@@ -849,7 +841,7 @@ function stopCamera() {
         stream
             .getTracks()
             .forEach(
-                track => {
+                function (track) {
 
                     track.stop();
 
@@ -860,6 +852,10 @@ function stopCamera() {
         stream =
             null;
     }
+
+
+    detectionStarted =
+        false;
 }
 
 
@@ -1033,67 +1029,56 @@ function calculateMeasurements(
 
 
     /*
-     * Prototype estimates.
+     * Prototype estimates only.
      */
 
     const chest =
         shoulder * 2.15;
 
-
     const waist =
         shoulder * 1.75;
 
 
-    /*
-     * Display results.
-     */
-
     document.getElementById(
         "heightResult"
     ).innerText =
-        round(
-            knownHeight
-        ) + " cm";
+        round(knownHeight) +
+        " cm";
 
 
     document.getElementById(
         "shoulderResult"
     ).innerText =
-        round(
-            shoulder
-        ) + " cm";
+        round(shoulder) +
+        " cm";
 
 
     document.getElementById(
         "armResult"
     ).innerText =
-        round(
-            arm
-        ) + " cm";
+        round(arm) +
+        " cm";
 
 
     document.getElementById(
         "inseamResult"
     ).innerText =
-        round(
-            inseam
-        ) + " cm";
+        round(inseam) +
+        " cm";
 
 
     document.getElementById(
         "chestResult"
     ).innerText =
-        round(
-            chest
-        ) + " cm";
+        round(chest) +
+        " cm";
 
 
     document.getElementById(
         "waistResult"
     ).innerText =
-        round(
-            waist
-        ) + " cm";
+        round(waist) +
+        " cm";
 
 
     const uniformSize =
@@ -1137,48 +1122,36 @@ function calculateUniformSize(
 ) {
 
     if (chest < 70) {
-
         return "28";
-
     }
 
     if (chest < 76) {
-
         return "30";
-
     }
 
     if (chest < 82) {
-
         return "32";
-
     }
 
     if (chest < 88) {
-
         return "34";
-
     }
 
     if (chest < 94) {
-
         return "36";
     }
-
 
     return "38+";
 }
 
 
 /* ==================================================
-   ROUNDING
+   ROUND
 ================================================== */
 
-function round(
-    number
-) {
+function round(number) {
 
     return Math.round(
         number * 10
     ) / 10;
-       }
+}
